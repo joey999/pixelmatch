@@ -4,10 +4,12 @@
   "description": "The smallest and fastest pixel-level image comparison library.",
   "main": "index.js",
   "bin": {
-    "pixelmatch": "bin/pixelmatch"
+    "pixelmatch": "bin/pixelmatch",
+    "rgbtogray": "bin/rgbtogray"
   },
   "files": [
-    "bin/pixelmatch"
+    "bin/pixelmatch",
+    "bin/rgbtogray"
   ],
   "dependencies": {
     "pngjs": "^4.0.1"

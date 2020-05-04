@@ -5,39 +5,103 @@
 
 const PNG = require('pngjs').PNG;
 const fs = require('fs');
-const match = require('../.');
+const {pixelmatch, diffsPixelsCount} = require('../.');
 
 if (process.argv.length < 4) {
     console.log('Usage: pixelmatch image1.png image2.png [diff.png] [threshold=0.005] [includeAA=false]');
     process.exit(64);
 }
 
-const [,, img1Path, img2Path, diffPath, threshold, includeAA] = process.argv;
+const [, , img1Path, img2Path, diffPath, threshold, includeAA] = process.argv;
 const options = {
     threshold: +threshold,
-    includeAA: includeAA !== undefined && includeAA !== 'false'
+    includeAA: includeAA === 'true'
 };
 
 const img1 = PNG.sync.read(fs.readFileSync(img1Path));
 const img2 = PNG.sync.read(fs.readFileSync(img2Path));
 
-const {width, height} = img1;
-
-if (img2.width !== width || img2.height !== height) {
-    console.log(`Image dimensions do not match: ${width}x${height} vs ${img2.width}x${img2.height}`);
+if (!diffPath) {
+    console.log(`diffPath is ${diffPath}`);
     process.exit(65);
 }
 
-const diff = diffPath ? new PNG({width, height}) : null;
+const diff = new PNG({width: img1.width, height: img1.height});
 
-console.time('matched in');
-const diffs = match(img1.data, img2.data, diff ? diff.data : null, width, height, options);
-console.timeEnd('matched in');
+const resultMatching = [];
+if (img2.width < img1.width || img2.height < img1.height) {
+    console.log(`Reference image > target image: [${img1.width},${img1.height}]>[${img2.width},${img2.height}]`);
+    for (let startHeight = 0; startHeight < img1.height - img2.height; startHeight++) {
+        for (let startWidth = 0; startWidth < img1.width - img2.width; startWidth++) {
 
-console.log(`different pixels: ${diffs}`);
-console.log(`error: ${Math.round(100 * 100 * diffs / (width * height)) / 100}%`);
+            // console.time('matched in');
 
-if (diff) {
+            const diffs = diffsPixelsCount({
+                img1,
+                img2,
+                output: diff.data,
+                startHeightImg1: startHeight,
+                startWidthImg1: startWidth,
+                options
+            });
+            // console.timeEnd('matched in');
+            // console.log(`different pixels: ${diffs}`);
+
+            console.log(`[${startHeight}, ${startWidth}]; diffs: ${diffs}`);
+            resultMatching.push({diffs, startHeight, startWidth});
+        }
+    }
+    resultMatching.push({diffs: 154295, startHeight: 31, startWidth: 0});
+    const diffs0List = resultMatching.filter(x => x.diffs === 0);
+    console.log(`Проверяемое изображение ложится на эталон без ошибок в ${diffs0List.length} случаях!`);
+
+    const minDiffs = Math.min(...resultMatching.map(x => x.diffs));
+    console.log(`Минимальное кол-во ошибок = ${minDiffs}`);
+    const coordinates = resultMatching.find(x => x.diffs === minDiffs);
+    console.log(`Координаты: ${JSON.stringify(coordinates)}`);
+    console.log(`Кол-во совпадений с мин-м кол-вом ошибок: ${resultMatching.filter(x => x.diffs === minDiffs).length}`);
+    console.log(`Всего проверок: ${resultMatching.length}`);
+
+    const diffs = pixelmatch({
+        img1,
+        img2,
+        output: diff.data,
+        // startHeightImg1: coordinates.startHeight,
+        // startWidthImg1: coordinates.startWidth,
+        startHeightImg1: coordinates.startHeight,
+        startWidthImg1: coordinates.startWidth,
+        options
+    });
+
+    console.log(`different pixels: ${diffs}`);
+    console.log(`error: ${Math.round(100 * 100 * diffs / (img2.width * img2.height)) / 100}%`);
+
     fs.writeFileSync(diffPath, PNG.sync.write(diff));
+    process.exit(diffs ? 66 : 0);
+
+} else if (img2.width === img1.width && img2.height === img1.height) {
+    console.time('matched in');
+    const diffs = pixelmatch({
+        img1: img1.data,
+        img2: img2.data,
+        output: diff.data,
+        width: img2.width,
+        height: img2.height,
+        startHeightImg1: 0,
+        startWidthImg1: 0,
+        options
+    });
+    console.timeEnd('matched in');
+
+    console.log(`different pixels: ${diffs}`);
+    console.log(`error: ${Math.round(100 * 100 * diffs / (img2.width * img2.height)) / 100}%`);
+
+    if (diff) {
+        fs.writeFileSync(diffPath, PNG.sync.write(diff));
+    }
+    process.exit(diffs ? 66 : 0);
+
+} else {
+    console.log(`Image dimensions do not match: ${img1.width}x${img1.height} >= ${img2.width}x${img2.height}`);
+    process.exit(65);
 }
-process.exit(diffs ? 66 : 0);

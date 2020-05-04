@@ -5,7 +5,7 @@
 
 const PNG = require('pngjs').PNG;
 const fs = require('fs');
-const match = require('../.');
+const {rgb2yiq} = require('../.');
 
 if (process.argv.length < 3) {
     console.log('Usage: pixelmatch image1.png image2.png [diff.png] [threshold=0.005] [includeAA=false]');
@@ -15,12 +15,15 @@ if (process.argv.length < 3) {
 const [,, img1Path, diffPath, threshold, includeAA] = process.argv;
 const options = {
     threshold: +threshold,
-    includeAA: includeAA === 'true'
+    includeAA: includeAA === 'true',
+    alpha: 255,
 };
 
 const img1 = PNG.sync.read(fs.readFileSync(img1Path));
 
 const {width, height} = img1;
+
+console.log(`width, height - ${width}, ${height}`);
 
 if (!diffPath) {
     console.log(`diffPath is ${diffPath}`);
@@ -29,7 +32,7 @@ if (!diffPath) {
 const grayPNG = new PNG({width, height});
 
 console.time('matched in');
-const diffs = match(img1.data, grayPNG.data, width, height, options);
+const diffs = rgb2yiq(img1, grayPNG.data, options);
 console.timeEnd('matched in');
 
 console.log(`different pixels: ${diffs}`);
