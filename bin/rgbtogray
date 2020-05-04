@@ -1,0 +1,41 @@
+#!/usr/bin/env node
+/* eslint-disable no-process-exit */
+
+'use strict';
+
+const PNG = require('pngjs').PNG;
+const fs = require('fs');
+const match = require('../.');
+
+if (process.argv.length < 3) {
+    console.log('Usage: pixelmatch image1.png image2.png [diff.png] [threshold=0.005] [includeAA=false]');
+    process.exit(64);
+}
+
+const [,, img1Path, diffPath, threshold, includeAA] = process.argv;
+const options = {
+    threshold: +threshold,
+    includeAA: includeAA === 'true'
+};
+
+const img1 = PNG.sync.read(fs.readFileSync(img1Path));
+
+const {width, height} = img1;
+
+if (!diffPath) {
+    console.log(`diffPath is ${diffPath}`);
+    process.exit(65);
+}
+const grayPNG = new PNG({width, height});
+
+console.time('matched in');
+const diffs = match(img1.data, grayPNG.data, width, height, options);
+console.timeEnd('matched in');
+
+console.log(`different pixels: ${diffs}`);
+console.log(`error: ${Math.round(100 * 100 * diffs / (width * height)) / 100}%`);
+
+if (grayPNG) {
+    fs.writeFileSync(diffPath, PNG.sync.write(grayPNG));
+}
+process.exit(diffs ? 66 : 0);
